@@ -50,7 +50,35 @@ async def join(ctx: commands.Context):
         return
 
     channel = ctx.author.voice.channel
-    vc = await channel.connect()
+
+    # 이전에 꼬인 연결이 남아있으면 먼저 정리
+    existing_vc = ctx.guild.voice_client
+    if existing_vc is not None:
+        try:
+            existing_vc.stop_recording()
+        except Exception:
+            pass
+        try:
+            await existing_vc.disconnect(force=True)
+        except Exception:
+            pass
+        await asyncio.sleep(1)
+
+    try:
+        vc = await channel.connect(timeout=20, reconnect=False)
+    except discord.errors.ClientException as e:
+        await ctx.send(f"음성 연결 실패: {e}")
+        return
+
+    # 연결이 실제로 준비될 때까지 잠깐 재시도 (최대 5초)
+    for _ in range(10):
+        if vc.is_connected():
+            break
+        await asyncio.sleep(0.5)
+    else:
+        await ctx.send("음성 연결이 안정적으로 안 잡혔어. (네트워크/UDP 문제일 수 있음)")
+        await vc.disconnect(force=True)
+        return
 
     async def on_segment(user_id: int, pcm_bytes: bytes):
         member = ctx.guild.get_member(user_id)
@@ -67,7 +95,13 @@ async def join(ctx: commands.Context):
         # vc.stop_recording() 호출 시 (leave) 실행됨. 특별히 할 일 없음.
         pass
 
-    vc.start_recording(SpeakingSink(on_segment=on_segment), finished_callback)
+    try:
+        vc.start_recording(SpeakingSink(on_segment=on_segment), finished_callback)
+    except discord.sinks.errors.RecordingException as e:
+        await ctx.send(f"녹음 시작 실패: {e}")
+        await vc.disconnect(force=True)
+        return
+
     await ctx.send(f"`{channel.name}` 음성 채널에 들어가서 음성 로그를 시작할게.")
 
 
