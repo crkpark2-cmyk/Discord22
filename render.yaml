@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: discord-voice-log-bot
+    env: docker
+    plan: starter
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_WHISPER_MODEL
+        value: whisper-large-v3-turbo
+      - key: LOG_CHANNEL_NAME
+        value: 음성-로그
